@@ -2,7 +2,7 @@ import os
 import sys
 from pathlib import Path
 from starlette.types import ASGIApp, Scope, Receive, Send
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 # Setup paths
 current_dir = Path(__file__).resolve().parent
@@ -77,6 +77,11 @@ app.include_router(v1_alt)
 def live_alt():
     return {"status": "ok"}
 
-@app.get("/ready")
-def ready_alt():
-    return {"status": "ready", "database": "ok"}
+@app.get("/")
+def debug_root(request: Request):
+    return {
+        "status": "ok",
+        "path": request.url.path,
+        "scope_path": request.scope.get("path"),
+        "headers": dict(request.headers),
+    }
