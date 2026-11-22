@@ -156,6 +156,10 @@ def test_not_over_passing_mandatory_leaf_is_likely_eligible(
     answers = {"state_code": "IN-AP", _INCOME: 150000}
     result = _decide_scheme(db, scheme_factory, rule, answers)
     assert result["decision"] == "LIKELY_ELIGIBLE"
+    income_crit = next(c for c in result["criteria"] if c["criterion_id"] == "income")
+    assert income_crit["status"] == "PASS"
+    assert income_crit["mandatory"] is True
+    assert "Passed" in income_crit["explanation"]
 
 
 def test_not_over_failing_mandatory_leaf_is_not_likely_eligible(
@@ -170,6 +174,30 @@ def test_not_over_failing_mandatory_leaf_is_not_likely_eligible(
     answers = {"state_code": "IN-AP", _INCOME: 600000}
     result = _decide_scheme(db, scheme_factory, rule, answers)
     assert result["decision"] == "NOT_LIKELY_ELIGIBLE"
+    income_crit = next(c for c in result["criteria"] if c["criterion_id"] == "income")
+    assert income_crit["status"] == "FAIL"
+    assert income_crit["mandatory"] is True
+    assert "Failed" in income_crit["explanation"]
+
+
+def test_any_disjunction_criteria_reporting_relaxes_mandatory_on_passing_group(
+    db: Session, scheme_factory: Callable[..., Any]
+) -> None:
+    rule = {
+        "any": [
+            _leaf(_AGE, "gte", 18, criterion_id="age", mandatory=True),
+            _leaf("is_student", "eq", True, criterion_id="student", mandatory=True),
+        ]
+    }
+    answers = {"state_code": "IN-AP", _AGE: 25, "is_student": False}
+    result = _decide_scheme(db, scheme_factory, rule, answers)
+    assert result["decision"] == "LIKELY_ELIGIBLE"
+    age_crit = next(c for c in result["criteria"] if c["criterion_id"] == "age")
+    student_crit = next(c for c in result["criteria"] if c["criterion_id"] == "student")
+    assert age_crit["status"] == "PASS"
+    assert age_crit["mandatory"] is True
+    assert student_crit["status"] == "FAIL"
+    assert student_crit["mandatory"] is False
 
 
 def test_advisory_failing_leaf_does_not_change_decision_but_is_reported(

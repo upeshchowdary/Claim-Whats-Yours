@@ -93,9 +93,11 @@ def test_identify_missing_fields() -> None:
     )
     result = service.turn(req)
 
-    # Should identify fields that weren't provided
+    # Should identify fields needed by matching/applicable schemes
     assert len(result.missing_fields) > 0
-    assert "annual_household_income_inr" in result.missing_fields
+    assert "is_unorganised_worker" in result.missing_fields or "is_farmer" in result.missing_fields
+    assert "education_level" not in result.missing_fields
+    assert "family_size" not in result.missing_fields
 
 
 def test_eligibility_not_ready_when_missing_fields() -> None:
@@ -282,7 +284,7 @@ def test_full_conversation_turn() -> None:
     assert result.extracted_profile["state_code"] == "IN-AP"
     assert result.extracted_profile["is_farmer"] is True
     assert "landholding_acres" in result.missing_fields
-    assert "annual_household_income_inr" in result.missing_fields
+    assert "education_level" not in result.missing_fields
 
 
 def test_response_schema_includes_language() -> None:
@@ -304,3 +306,67 @@ def test_response_schema_includes_language() -> None:
     # Language detection is internal to extraction; response doesn't expose it
     # But the test verifies the flow completes successfully
     assert result.extracted_profile is not None
+
+
+def test_conversation_scopes_missing_fields_to_matching_schemes() -> None:
+    """Verify that only fields required by matching schemes are returned as missing."""
+    groq_mock = MagicMock()
+    groq_mock.structured_request.return_value = {
+        "language": "en",
+        "extracted_answers": {"is_farmer": True},
+        "missing_fields": [],
+        "clarification_required": False,
+        "next_question": None,
+        "intent_summary": "Farmer",
+    }
+
+    service = _make_service(groq_mock)
+    req = ConversationRequest(
+        messages=["I am a farmer"],
+        answers={"is_farmer": True},
+        locale="en",
+    )
+    result = service.turn(req)
+
+    # Missing fields should only contain farmer-related missing fields
+    assert "landholding_acres" in result.missing_fields
+    # Irrelevant catalogue fields must not be required
+    assert "is_unorganised_worker" not in result.missing_fields
+    assert "education_level" not in result.missing_fields
+    assert "marital_status" not in result.missing_fields
+    assert "family_size" not in result.missing_fields
+    assert "disability_status" not in result.missing_fields
+
+
+def test_conversation_eligibility_ready_when_matching_scheme_satisfied() -> None:
+    """Verify that readiness is True when a matching scheme's mandatory fields are all answered."""
+    groq_mock = MagicMock()
+    groq_mock.structured_request.return_value = {
+        "language": "en",
+        "extracted_answers": {
+            "state_code": "IN-AP",
+            "is_farmer": True,
+            "landholding_acres": 2.5,
+        },
+        "missing_fields": [],
+        "clarification_required": False,
+        "next_question": None,
+        "intent_summary": "AP Farmer",
+    }
+
+    service = _make_service(groq_mock)
+    req = ConversationRequest(
+        messages=["I am an AP farmer with 2.5 acres"],
+        answers={
+            "state_code": "IN-AP",
+            "is_farmer": True,
+            "landholding_acres": 2.5,
+        },
+        locale="en",
+    )
+    result = service.turn(req)
+
+    assert result.eligibility_ready is True
+    assert result.missing_fields == []
+    assert result.follow_up_question is None
+    assert result.evaluation_suggestion is not None

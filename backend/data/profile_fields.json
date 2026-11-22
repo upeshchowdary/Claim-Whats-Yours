@@ -171,6 +171,101 @@
       "sensitivity": "low",
       "ask_only_when_relevant": true,
       "allowed_values": [true, false]
+    },
+    {
+      "id": "ration_card_type",
+      "category": "economic",
+      "type": "enum",
+      "label": "Ration Card Type",
+      "description": "Type of ration card held under NFSA",
+      "required": false,
+      "sensitivity": "medium",
+      "ask_only_when_relevant": true,
+      "allowed": ["aay", "bpl_phh", "apl_nphh", "none", "prefer_not_to_say"],
+      "allowed_values": ["aay", "bpl_phh", "apl_nphh", "none", "prefer_not_to_say"]
+    },
+    {
+      "id": "is_income_tax_payer",
+      "category": "economic",
+      "type": "bool",
+      "label": "Income Tax Payer",
+      "description": "Whether applicant or family filed income tax in the last assessment year",
+      "required": false,
+      "sensitivity": "medium",
+      "ask_only_when_relevant": true,
+      "allowed": [true, false],
+      "allowed_values": [true, false]
+    },
+    {
+      "id": "disability_percentage",
+      "category": "health",
+      "type": "int",
+      "label": "Disability Percentage",
+      "description": "Certified benchmark disability percentage",
+      "required": false,
+      "sensitivity": "medium",
+      "ask_only_when_relevant": true,
+      "range": {"min": 0, "max": 100}
+    },
+    {
+      "id": "minority_status",
+      "category": "demographic",
+      "type": "bool",
+      "label": "Minority Status",
+      "description": "Whether applicant belongs to a notified minority community",
+      "required": false,
+      "sensitivity": "medium",
+      "ask_only_when_relevant": true,
+      "allowed": [true, false],
+      "allowed_values": [true, false]
+    },
+    {
+      "id": "owns_pucca_house",
+      "category": "housing",
+      "type": "bool",
+      "label": "Owns Pucca House",
+      "description": "Whether applicant or family owns a pucca house in India",
+      "required": false,
+      "sensitivity": "medium",
+      "ask_only_when_relevant": true,
+      "allowed": [true, false],
+      "allowed_values": [true, false]
+    },
+    {
+      "id": "employer_sector",
+      "category": "employment",
+      "type": "enum",
+      "label": "Employer Sector",
+      "description": "Sector of your employer",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "allowed": ["government", "private_organized", "unorganized", "none", "prefer_not_to_say"],
+      "allowed_values": ["government", "private_organized", "unorganized", "none", "prefer_not_to_say"]
+    },
+    {
+      "id": "has_epf_esi",
+      "category": "employment",
+      "type": "bool",
+      "label": "EPF / ESI Coverage",
+      "description": "Whether covered under EPF or ESI",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "allowed": [true, false],
+      "allowed_values": [true, false]
+    },
+    {
+      "id": "current_enrollment",
+      "category": "education",
+      "type": "bool",
+      "label": "Currently Enrolled",
+      "description": "Whether currently enrolled in school, college, or university",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "allowed": [true, false],
+      "allowed_values": [true, false]
     }
   ],
   "forbidden_fields": [

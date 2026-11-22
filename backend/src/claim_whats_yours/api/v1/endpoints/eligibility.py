@@ -22,11 +22,14 @@ def evaluate(
 ) -> JSONResponse | dict[str, Any]:
     """Evaluate published schemes against the supplied answers without persisting them."""
     request_id = getattr(request.state, "request_id", "unknown")
+    categories = set(body.filters.categories) or None
+    government_levels = set(body.filters.government_levels) or None
     result = evaluate_profile(
         session,
         body.answers,
         datetime.now(UTC),
-        set(body.filters.government_levels) or None,
+        government_levels,
+        categories=categories,
     )
     if "errors" in result:
         return JSONResponse(
@@ -40,11 +43,4 @@ def evaluate(
                 }
             },
         )
-    wanted = set(body.filters.categories)
-    if wanted:
-        result["results"] = [
-            item
-            for item in result["results"]
-            if "categories" not in item or wanted.intersection(item["categories"])
-        ]
     return {"request_id": request_id, **result}

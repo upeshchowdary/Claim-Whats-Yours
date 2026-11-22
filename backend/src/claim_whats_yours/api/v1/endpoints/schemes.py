@@ -22,11 +22,13 @@ router = APIRouter(prefix="/schemes", tags=["schemes"])
 def list_schemes(
     request: Request,
     q: str | None = Query(default=None, max_length=200),
-    government_level: Literal["central", "state", "ut", "district"] | None = None,
+    government_level: (
+        list[Literal["central", "state", "ut", "district"]] | None
+    ) = Query(default=None),
     state_code: str | None = Query(default=None, max_length=16),
     district_code: str | None = Query(default=None, max_length=16),
-    category: str | None = Query(default=None, max_length=100),
-    beneficiary_group: str | None = Query(default=None, max_length=100),
+    category: list[str] | None = Query(default=None),
+    beneficiary_group: list[str] | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     session: Session = Depends(get_db),

@@ -23,16 +23,109 @@ import logging
 import re
 from typing import Any
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from claim_whats_yours.core.config import Settings, get_settings
+from claim_whats_yours.db.models import Scheme
+from claim_whats_yours.db.session import get_session_factory
 from claim_whats_yours.domain.fields import load_registry, validate_answers
+from claim_whats_yours.domain.geography import known_state_codes
+from claim_whats_yours.domain.rules import Tri, prune_advisory
 from claim_whats_yours.schemas.conversation import (
     ConversationRequest,
     ConversationTurnResponse,
     ExtractedProfile,
 )
 from claim_whats_yours.services.ai.groq_client import GroqClient
+from claim_whats_yours.services.eligibility_service import _extract_leaves, _raw_leaf_fields
 
 logger = logging.getLogger(__name__)
+
+
+_DEFAULT_SCHEME_RULES: list[dict[str, Any]] = [
+    {
+        "id": "sch_pm_kisan_2019",
+        "scope": "all_india",
+        "state_codes": [],
+        "rule": {
+            "all": [
+                {
+                    "criterion_id": "crit_is_farmer",
+                    "field": "is_farmer",
+                    "operator": "eq",
+                    "value": True,
+                    "mandatory": True,
+                    "explanation": "Applicant family must cultivate or own agricultural land.",
+                    "source_refs": ["src_pm_kisan_guidelines"],
+                },
+                {
+                    "criterion_id": "crit_landholding",
+                    "field": "landholding_acres",
+                    "operator": "gt",
+                    "value": 0.0,
+                    "mandatory": True,
+                    "explanation": "Must hold cultivable land in revenue records.",
+                    "source_refs": ["src_pm_kisan_guidelines"],
+                },
+            ]
+        },
+    },
+    {
+        "id": "sch_ap_rythu_bharosa",
+        "scope": "state",
+        "state_codes": ["IN-AP"],
+        "rule": {
+            "all": [
+                {
+                    "criterion_id": "crit_ap_resident",
+                    "field": "state_code",
+                    "operator": "eq",
+                    "value": "IN-AP",
+                    "mandatory": True,
+                    "explanation": "Must reside in Andhra Pradesh.",
+                    "source_refs": ["src_ap_rythu_go"],
+                },
+                {
+                    "criterion_id": "crit_ap_farmer",
+                    "field": "is_farmer",
+                    "operator": "eq",
+                    "value": True,
+                    "mandatory": True,
+                    "explanation": "Must be a landowner farmer or registered tenant farmer.",
+                    "source_refs": ["src_ap_rythu_go"],
+                },
+            ]
+        },
+    },
+    {
+        "id": "sch_pm_svanidhi",
+        "scope": "all_india",
+        "state_codes": [],
+        "rule": {
+            "all": [
+                {
+                    "criterion_id": "crit_svanidhi_worker",
+                    "field": "is_unorganised_worker",
+                    "operator": "eq",
+                    "value": True,
+                    "mandatory": True,
+                    "explanation": "Must be engaged in vending or unorganised micro-enterprise.",
+                    "source_refs": ["src_pm_svanidhi_scheme"],
+                },
+                {
+                    "criterion_id": "crit_svanidhi_age",
+                    "field": "age_years",
+                    "operator": "gte",
+                    "value": 18,
+                    "mandatory": True,
+                    "explanation": "Street vendor must be at least 18 years of age.",
+                    "source_refs": ["src_pm_svanidhi_scheme"],
+                },
+            ]
+        },
+    },
+]
 
 
 class ConversationService:
@@ -45,15 +138,25 @@ class ConversationService:
         "is_farmer",  # Need confirmation
     }
 
-    def __init__(self, groq: GroqClient, settings: Settings) -> None:
+    def __init__(
+        self,
+        groq: GroqClient,
+        settings: Settings,
+        session: Session | None = None,
+        schemes: list[Any] | None = None,
+    ) -> None:
         self._groq = groq
         self._cfg = settings
+        self._session = session
+        self._schemes = schemes
 
     @classmethod
-    def from_settings(cls, settings: Settings | None = None) -> ConversationService:
+    def from_settings(
+        cls, settings: Settings | None = None, session: Session | None = None
+    ) -> ConversationService:
         cfg = settings or get_settings()
         groq = GroqClient.from_settings(cfg)
-        return cls(groq, cfg)
+        return cls(groq, cfg, session=session)
 
     def turn(self, req: ConversationRequest) -> ConversationTurnResponse:
         """Process one turn of the conversation.
@@ -201,20 +304,111 @@ class ConversationService:
             intent_summary=result.get("intent_summary", ""),
         )
 
+    def _get_schemes(self) -> list[Any]:
+        if self._schemes is not None:
+            return self._schemes
+        if self._session is not None:
+            try:
+                stmt = select(Scheme).where(Scheme.record_status == "published")
+                schemes = list(self._session.scalars(stmt).all())
+                if schemes:
+                    return schemes
+            except Exception:
+                pass
+        try:
+            url = self._cfg.database_url
+            with get_session_factory(url)() as s:
+                stmt = select(Scheme).where(Scheme.record_status == "published")
+                schemes = list(s.scalars(stmt).all())
+                if schemes:
+                    return schemes
+        except Exception:
+            pass
+        return _DEFAULT_SCHEME_RULES
+
     def _identify_missing(self, answers: dict[str, Any]) -> list[str]:
         """Identify profile fields needed for eligibility evaluation.
 
-        Returns a list of field IDs that are missing or have no answer.
+        Returns only the missing fields needed by matching or applicable schemes,
+        rather than requiring all 16 profile fields from the catalogue.
         """
-        missing: list[str] = []
-        registry = load_registry()
+        schemes = self._get_schemes()
+        applicable_schemes: list[Any] = []
+        for scheme in schemes:
+            scope = (
+                getattr(scheme, "scope", None)
+                or (scheme.get("scope") if isinstance(scheme, dict) else "all_india")
+            )
+            if hasattr(scheme, "jurisdictions") and scheme.jurisdictions:
+                state_codes = [
+                    j.jurisdiction_code
+                    for j in scheme.jurisdictions
+                    if j.jurisdiction_code in known_state_codes()
+                ]
+            elif isinstance(scheme, dict):
+                state_codes = scheme.get("state_codes", [])
+            else:
+                state_codes = []
 
-        for field_id in registry:
-            value = answers.get(field_id)
-            if value is None or value == "prefer_not_to_say":
-                missing.append(field_id)
+            state_ans = answers.get("state_code")
+            if state_ans is not None and scope == "state" and state_ans not in state_codes:
+                continue
+            applicable_schemes.append(scheme)
 
-        return missing
+        if not applicable_schemes:
+            return []
+
+        ready_schemes: list[Any] = []
+        partial_matches: list[tuple[Any, list[str]]] = []
+        candidate_schemes: list[tuple[Any, list[str]]] = []
+
+        for scheme in applicable_schemes:
+            rule = (
+                getattr(scheme, "eligibility_rule", None)
+                or (scheme.get("rule") if isinstance(scheme, dict) else None)
+            )
+            if not rule:
+                continue
+
+            pruned = prune_advisory(rule) or rule
+            leaf_fields = _raw_leaf_fields(pruned)
+            leaves = _extract_leaves(pruned, answers)
+
+            has_fail = any(
+                leaf_item.status is Tri.FAIL and leaf_item.mandatory for leaf_item in leaves
+            )
+            if has_fail:
+                continue
+
+            missing_for_scheme = [
+                field
+                for leaf, field in zip(leaves, leaf_fields, strict=True)
+                if leaf.status is Tri.UNKNOWN
+                and (answers.get(field) is None or answers.get(field) == "prefer_not_to_say")
+            ]
+
+            if not missing_for_scheme:
+                ready_schemes.append(scheme)
+            else:
+                has_pass = any(leaf_item.status is Tri.PASS for leaf_item in leaves)
+                if has_pass:
+                    partial_matches.append((scheme, missing_for_scheme))
+                else:
+                    candidate_schemes.append((scheme, missing_for_scheme))
+
+        if partial_matches:
+            missing_set: set[str] = set()
+            for _, fields in partial_matches:
+                missing_set.update(fields)
+            return sorted(missing_set)
+
+        if ready_schemes:
+            return []
+
+        missing_set = set()
+        for _, fields in candidate_schemes:
+            missing_set.update(fields)
+        return sorted(missing_set)
 
     def _generate_follow_up(self, missing: list[str], answers: dict[str, Any], locale: str) -> str:
         """Generate a targeted follow-up question for the first missing field."""
@@ -244,6 +438,12 @@ class ConversationService:
             return "Which social category do you belong to?"
         if field_id == "disability_status":
             return "Do you have any certified disability?"
+        if field_id == "is_unorganised_worker":
+            return "Do you work in the unorganised sector or informal economy?"
+        if field_id == "state_code":
+            return "Which state or union territory do you live in?"
+        if field_id == "age_years":
+            return "What is your age in completed years?"
 
         # Generic follow-up
         return f"What is your {field_name.lower()}?"

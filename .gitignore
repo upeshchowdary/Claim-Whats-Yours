@@ -49,3 +49,6 @@ Thumbs.db
 
 # Tool caches
 .codebenders/
+
+.vercel
+.env*

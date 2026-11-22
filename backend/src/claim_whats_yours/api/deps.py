@@ -16,6 +16,6 @@ def require_admin(
     if not configured:
         raise AppError(403, "ADMIN_DISABLED", "Admin endpoints are disabled.")
     if x_admin_token is None:
-        raise AppError(401, "UNAUTHORIZED", "Admin token required.")
+        raise AppError(403, "ADMIN_TOKEN_INVALID", "Admin token required.")
     if not hmac.compare_digest(x_admin_token.encode(), configured.encode()):
-        raise AppError(401, "UNAUTHORIZED", "Admin token invalid.")
+        raise AppError(403, "ADMIN_TOKEN_INVALID", "Admin token invalid.")

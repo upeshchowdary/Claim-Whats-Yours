@@ -92,8 +92,8 @@ def test_unknown_scope_raises_value_error() -> None:
 
 def test_registry_has_correct_total_entries() -> None:
     records = json.loads(DATA_PATH.read_text(encoding="utf-8"))
-    # 1 all-India + 28 states + 8 UTs + 13 AP districts = 50
-    assert len(records) == 50
+    # 1 all-India + 28 states + 8 UTs + 13 AP districts + 7 multi-state persona districts = 57
+    assert len(records) == 57
 
 
 def test_registry_level_counts() -> None:
@@ -104,7 +104,7 @@ def test_registry_level_counts() -> None:
     assert counts["all_india"] == 1
     assert counts["state"] == 28
     assert counts["ut"] == 8
-    assert counts["district"] == 13  # 13 official AP districts
+    assert counts["district"] == 20  # 13 AP + 7 multi-state persona districts
 
 
 def test_known_state_codes_has_36_entries() -> None:
@@ -155,6 +155,13 @@ def test_state_code_is_not_a_district() -> None:
         ("IN-AP-VJA", "IN-AP"),
         ("IN-AP-ANT", "IN-AP"),
         ("IN-AP-KNL", "IN-AP"),
+        ("IN-UP-LKO", "IN-UP"),
+        ("IN-MH-PUN", "IN-MH"),
+        ("IN-KA-RAI", "IN-KA"),
+        ("IN-WB-NAD", "IN-WB"),
+        ("IN-PB-LDH", "IN-PB"),
+        ("IN-TG-HYD", "IN-TG"),
+        ("IN-RJ-JAI", "IN-RJ"),
     ],
 )
 def test_district_parent_state(district: str, expected_parent: str) -> None:

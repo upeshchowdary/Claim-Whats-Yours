@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from unittest.mock import MagicMock
+
+from claim_whats_yours.app import app
+from claim_whats_yours.db.session import get_db
 
 HEX_32 = re.compile(r"[0-9a-f]{32}")
 
@@ -19,6 +23,28 @@ def test_ready_returns_200(client: Any) -> None:
     response = client.get("/health/ready")
 
     assert response.status_code == 200
+    assert response.json() == {"status": "ready", "database": "ok"}
+
+
+def test_ready_returns_500_on_db_failure(client: Any) -> None:
+    failing_db = MagicMock()
+    failing_db.execute.side_effect = RuntimeError("DB connection lost")
+
+    def override_get_db() -> Any:
+        yield failing_db
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = client.get("/health/ready")
+        assert response.status_code == 500
+        assert response.json() == {
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "Database unreachable",
+            }
+        }
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 def test_supplied_request_id_is_echoed(client: Any) -> None:

@@ -44,6 +44,9 @@ _DECISION_ORDER: dict[str, int] = {
 }
 
 
+_STATUS_PREFIX = {Tri.PASS: "Passed", Tri.FAIL: "Failed", Tri.UNKNOWN: "Unknown"}
+
+
 def evaluate_profile(
     session: Session,
     answers: dict[str, Any],
@@ -51,6 +54,7 @@ def evaluate_profile(
     government_levels: set[str] | None,
     today: date | None = None,
     doc_service: DocumentService | None = None,
+    categories: set[str] | list[str] | None = None,
 ) -> dict[str, Any]:
     """Evaluate published schemes against stateless answers. Nothing is stored.
 
@@ -75,25 +79,50 @@ def evaluate_profile(
     schemes = session.scalars(select(Scheme).where(Scheme.record_status == "published")).all()
     results: list[dict[str, Any]] = []
     excluded: list[dict[str, Any]] = []
+    excluded_by_geography = 0
+    excluded_by_filters = 0
+    category_filter = set(categories) if categories else None
+
     for scheme in schemes:
         if government_levels is not None and scheme.government_level not in government_levels:
+            excluded_by_filters += 1
             continue
-        if not _in_scope(scheme, answers, today):
+
+        payload = scheme.payload if isinstance(scheme.payload, dict) else {}
+        if category_filter is not None:
+            scheme_categories = set(payload.get("categories", []))
+            if not (scheme_categories & category_filter):
+                excluded_by_filters += 1
+                continue
+
+        if not _in_effective_period(scheme, today):
             continue
+
+        if not applicable(_scheme_geo(scheme, answers)):
+            excluded_by_geography += 1
+            continue
+
         rule_errors = [error.as_dict() for error in check_rule(scheme.eligibility_rule)]
         if rule_errors:
             excluded.append(_rule_invalid_entry(scheme, rule_errors))
             continue
         results.append(_evaluate_scheme(scheme, answers, today, doc_service))
+
     results.sort(key=lambda r: (_DECISION_ORDER[r["decision"]], r["scheme_id"]))
     excluded.sort(key=lambda e: e["scheme_id"])
     missing = sorted({field for r in results for field in r["missing_fields"]})
+    coverage = {
+        "schemes_considered": len(schemes),
+        "excluded_by_geography": excluded_by_geography,
+        "excluded_by_filters": excluded_by_filters,
+    }
     return {
         "evaluation_date": today.isoformat(),
         "results": results,
         "excluded_schemes": excluded,
         "missing_fields": missing,
         "follow_up_questions": build_questions(missing, results),
+        "coverage": coverage,
         "disclaimer": DISCLAIMER,
     }
 
@@ -124,7 +153,7 @@ def _evaluate_scheme(
     """Return the per-scheme result. The caller has already checked scope and rule validity."""
     geo = _scheme_geo(scheme, answers)
     rule = scheme.eligibility_rule
-    leaves = _leaf_results(evaluate_rule(rule, answers))
+    leaves = _extract_leaves(rule, answers)
     fields = _raw_leaf_fields(rule)
     decision_status = _decision_status(rule, answers)
     verification_current = _verification_current(scheme, today)
@@ -231,6 +260,91 @@ def _verification_current(scheme: Scheme, today: date) -> bool:
     if scheme.last_verified_at is None or scheme.review_due_at is None:
         return False
     return _utc_date(scheme.review_due_at) > today
+
+
+def _extract_leaves(
+    node: dict[str, Any],
+    profile: dict[str, Any],
+    in_not: bool = False,
+    parent_any_satisfied: bool = False,
+) -> list[CriterionResult]:
+    """Extract leaf criteria with negation propagation and disjunction alternative relaxation."""
+    for key in ("all", "any"):
+        if key in node:
+            if key == "all":
+                return [
+                    leaf
+                    for child in node["all"]
+                    for leaf in _extract_leaves(
+                        child, profile, in_not=in_not, parent_any_satisfied=parent_any_satisfied
+                    )
+                ]
+            children = node["any"]
+            group_res = evaluate_rule(node, profile)
+            any_passes = (
+                (group_res.status is Tri.PASS)
+                if not in_not
+                else (group_res.status is Tri.FAIL)
+            )
+            results: list[CriterionResult] = []
+            for child in children:
+                child_res = evaluate_rule(child, profile)
+                child_passes = (
+                    (child_res.status is Tri.PASS)
+                    if not in_not
+                    else (child_res.status is Tri.FAIL)
+                )
+                if any_passes and not child_passes:
+                    results.extend(
+                        _extract_leaves(
+                            child, profile, in_not=in_not, parent_any_satisfied=True
+                        )
+                    )
+                else:
+                    results.extend(
+                        _extract_leaves(
+                            child, profile, in_not=in_not, parent_any_satisfied=parent_any_satisfied
+                        )
+                    )
+            return results
+
+    if "not" in node:
+        return _extract_leaves(
+            node["not"],
+            profile,
+            in_not=(not in_not),
+            parent_any_satisfied=parent_any_satisfied,
+        )
+
+    leaf_res = evaluate_rule(node, profile)
+    effective_status = leaf_res.status
+    if in_not:
+        if effective_status is Tri.PASS:
+            effective_status = Tri.FAIL
+        elif effective_status is Tri.FAIL:
+            effective_status = Tri.PASS
+
+    explanation = leaf_res.explanation
+    if in_not and effective_status != leaf_res.status:
+        old_prefix = f"{_STATUS_PREFIX[leaf_res.status]}: "
+        new_prefix = f"{_STATUS_PREFIX[effective_status]}: "
+        if explanation.startswith(old_prefix):
+            explanation = new_prefix + explanation[len(old_prefix):]
+
+    mandatory = leaf_res.mandatory
+    if parent_any_satisfied and effective_status is not Tri.PASS:
+        mandatory = False
+
+    return [
+        CriterionResult(
+            criterion_id=leaf_res.criterion_id,
+            status=effective_status,
+            mandatory=mandatory,
+            explanation=explanation,
+            source_refs=leaf_res.source_refs,
+            children=(),
+        )
+    ]
 
 
 def _leaf_results(result: CriterionResult) -> list[CriterionResult]:

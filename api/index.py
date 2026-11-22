@@ -1,9 +1,8 @@
 import os
 import sys
 from pathlib import Path
+from starlette.types import ASGIApp, Scope, Receive, Send
 from fastapi import APIRouter
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 
 # Setup paths
 current_dir = Path(__file__).resolve().parent
@@ -45,6 +44,24 @@ except Exception as err:
 
 app = create_app()
 
+class VercelPathRewriteMiddleware:
+    """Restores original request path from x-matched-path or x-forwarded-path on Vercel."""
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            for name, value in scope.get("headers", []):
+                lower_name = name.lower()
+                if lower_name in (b"x-matched-path", b"x-vercel-matched-path", b"x-forwarded-path"):
+                    matched_path = value.decode("latin-1").split("?")[0]
+                    if matched_path and matched_path not in ("/api/index", "/api"):
+                        scope["path"] = matched_path
+                        break
+        await self.app(scope, receive, send)
+
+app.add_middleware(VercelPathRewriteMiddleware)
+
 # Also register /v1 prefix for environments where /api is stripped by routing proxies
 v1_alt = APIRouter(prefix="/v1")
 v1_alt.include_router(meta.router)
@@ -63,19 +80,3 @@ def live_alt():
 @app.get("/ready")
 def ready_alt():
     return {"status": "ready", "database": "ok"}
-
-# Serve frontend build if routed to this function
-dist_dir = (root_dir / "frontend" / "dist").resolve()
-assets_dir = dist_dir / "assets"
-if assets_dir.exists():
-    app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
-
-@app.get("/{full_path:path}")
-async def catch_all(full_path: str):
-    file_path = dist_dir / full_path
-    if full_path and file_path.is_file():
-        return FileResponse(file_path)
-    index_file = dist_dir / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    return {"status": "ok", "app": "Claim What's Yours"}

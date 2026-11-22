@@ -12,6 +12,7 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from claim_whats_yours.db.models import Scheme, SchemeJurisdiction
+from claim_whats_yours.domain.geography import district_parent_state
 
 PUBLISHED = "published"
 
@@ -54,11 +55,11 @@ def _apply_text_filter(stmt: Select[tuple[Scheme]], tokens: list[str]) -> Select
 def list_published_schemes(
     session: Session,
     q: str | None,
-    government_level: str | None,
+    government_level: str | list[str] | None,
     state_code: str | None,
     district_code: str | None,
-    category: str | None,
-    beneficiary_group: str | None,
+    category: str | list[str] | None,
+    beneficiary_group: str | list[str] | None,
     page: int,
     page_size: int,
 ) -> tuple[list[Scheme], int]:
@@ -67,29 +68,60 @@ def list_published_schemes(
     stmt = select(Scheme).where(Scheme.record_status == PUBLISHED)
     stmt = _apply_text_filter(stmt, tokens)
 
-    if government_level is not None:
-        stmt = stmt.where(Scheme.government_level == government_level)
+    if isinstance(government_level, str):
+        levels = [government_level]
+    elif government_level is not None:
+        levels = list(government_level)
+    else:
+        levels = []
 
-    if state_code is not None:
+    if levels:
+        stmt = stmt.where(Scheme.government_level.in_(levels))
+
+    if district_code is not None:
+        parent_state = state_code or district_parent_state(district_code)
+        state_ids = select(SchemeJurisdiction.scheme_id).where(
+            SchemeJurisdiction.jurisdiction_code == parent_state
+        )
+        district_ids = select(SchemeJurisdiction.scheme_id).where(
+            SchemeJurisdiction.jurisdiction_code == district_code
+        )
+        stmt = stmt.where(
+            or_(
+                Scheme.scope == "all_india",
+                Scheme.id.in_(state_ids),
+                Scheme.id.in_(district_ids),
+            )
+        )
+    elif state_code is not None:
         state_ids = select(SchemeJurisdiction.scheme_id).where(
             SchemeJurisdiction.jurisdiction_code == state_code
         )
         stmt = stmt.where(or_(Scheme.scope == "all_india", Scheme.id.in_(state_ids)))
 
-    if district_code is not None:
-        district_ids = select(SchemeJurisdiction.scheme_id).where(
-            SchemeJurisdiction.jurisdiction_code == district_code
-        )
-        stmt = stmt.where(Scheme.id.in_(district_ids))
-
     rows = list(session.scalars(stmt).all())
 
     # Category and beneficiary group live inside the JSON payload, so they are
     # matched Python-side on the loaded rows.
-    if category is not None:
-        rows = [s for s in rows if category in _payload_list(s, "categories")]
-    if beneficiary_group is not None:
-        rows = [s for s in rows if beneficiary_group in _payload_list(s, "beneficiary_groups")]
+    if isinstance(category, str):
+        categories = [category]
+    elif category is not None:
+        categories = list(category)
+    else:
+        categories = []
+
+    if categories:
+        rows = [s for s in rows if any(c in _payload_list(s, "categories") for c in categories)]
+
+    if isinstance(beneficiary_group, str):
+        groups = [beneficiary_group]
+    elif beneficiary_group is not None:
+        groups = list(beneficiary_group)
+    else:
+        groups = []
+
+    if groups:
+        rows = [s for s in rows if any(g in _payload_list(s, "beneficiary_groups") for g in groups)]
 
     rows.sort(key=lambda s: (-_name_hits(s, tokens), s.name, s.id))
 

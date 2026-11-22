@@ -73,19 +73,19 @@ def admin_disabled(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 @pytest.mark.parametrize(("method", "path"), ADMIN_ROUTES)
-def test_admin_route_without_token_returns_401(client: Any, method: str, path: str) -> None:
+def test_admin_route_without_token_returns_403(client: Any, method: str, path: str) -> None:
     response = client.request(method, path)
 
-    assert response.status_code == 401
-    assert response.json()["error"]["code"] == "UNAUTHORIZED"
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "ADMIN_TOKEN_INVALID"
 
 
 @pytest.mark.parametrize(("method", "path"), ADMIN_ROUTES)
-def test_admin_route_with_wrong_token_returns_401(client: Any, method: str, path: str) -> None:
+def test_admin_route_with_wrong_token_returns_403(client: Any, method: str, path: str) -> None:
     response = client.request(method, path, headers={"X-Admin-Token": "wrong-token-value"})
 
-    assert response.status_code == 401
-    assert response.json()["error"]["code"] == "UNAUTHORIZED"
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "ADMIN_TOKEN_INVALID"
 
 
 def test_wrong_token_response_does_not_echo_token(client: Any) -> None:
@@ -93,7 +93,8 @@ def test_wrong_token_response_does_not_echo_token(client: Any) -> None:
         "POST", IMPORT_URL, headers={"X-Admin-Token": "nope"}, json=SYNTHETIC_RECORD
     )
 
-    assert response.status_code == 401
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "ADMIN_TOKEN_INVALID"
     assert "nope" not in response.text
     assert "Traceback" not in response.text
 

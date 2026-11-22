@@ -197,3 +197,90 @@ def test_evaluation_persists_nothing(
     assert response.status_code == 200
     assert _count(db, "SELECT COUNT(*) FROM schemes") == schemes_before
     assert _count(db, "SELECT COUNT(*) FROM tracking_records") == tracking_before
+
+
+def test_evaluate_returns_coverage_metadata(
+    client: Any, db: Session, scheme_factory: Callable[..., Any]
+) -> None:
+    scheme_factory(
+        db,
+        "ELIG-COV-1",
+        scope="all_india",
+        review_due_at=_future_review(),
+    )
+    scheme_factory(
+        db,
+        "ELIG-COV-2",
+        scope="state",
+        state_codes=("IN-KA",),
+        government_level="state",
+        review_due_at=_future_review(),
+    )
+
+    response = _evaluate(client, {"answers": {"age_years": 25, "state_code": "IN-AP"}})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "coverage" in body
+    coverage = body["coverage"]
+    assert "schemes_considered" in coverage
+    assert "excluded_by_geography" in coverage
+    assert "excluded_by_filters" in coverage
+    assert coverage["schemes_considered"] >= 2
+    assert coverage["excluded_by_geography"] >= 1
+
+
+def test_category_filter_scopes_missing_fields_and_questions(
+    client: Any, db: Session, scheme_factory: Callable[..., Any]
+) -> None:
+    # Scheme in agriculture category needing landholding_acres
+    scheme_factory(
+        db,
+        "ELIG-AGRI",
+        categories=("agriculture",),
+        review_due_at=_future_review(),
+    )
+    # Scheme in health category needing income
+    health_scheme = scheme_factory(
+        db,
+        "ELIG-HEALTH",
+        categories=("health",),
+        review_due_at=_future_review(),
+    )
+    health_scheme.eligibility_rule = {
+        "all": [
+            {
+                "criterion_id": "c_income",
+                "field": "annual_household_income_inr",
+                "operator": "lte",
+                "value": 200000,
+                "mandatory": True,
+                "explanation": "Income lte 200k",
+                "source_refs": ["s1"],
+            }
+        ]
+    }
+    db.commit()
+
+    # Filter only for agriculture schemes
+    response = _evaluate(
+        client,
+        {
+            "answers": {},
+            "filters": {"categories": ["agriculture"]},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    # Results should only contain agriculture scheme
+    result_ids = {r["scheme_id"] for r in body["results"]}
+    assert "ELIG-AGRI" in result_ids
+    assert "ELIG-HEALTH" not in result_ids
+
+    # Missing fields and follow-up questions must NOT contain health scheme fields
+    assert "annual_household_income_inr" not in body["missing_fields"]
+    question_fields = [q["field"] for q in body["follow_up_questions"]]
+    assert "annual_household_income_inr" not in question_fields
+    assert body["coverage"]["excluded_by_filters"] >= 1

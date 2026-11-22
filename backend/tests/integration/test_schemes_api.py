@@ -159,3 +159,55 @@ def test_detail_missing_or_draft_returns_404(
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "SCHEME_NOT_FOUND"
     assert "Traceback" not in response.text
+
+
+def test_repeatable_category_query_param_or_logic(
+    client: Any, db: Session, scheme_factory: Callable[..., models.Scheme]
+) -> None:
+    scheme_factory(db, "rep-cat-health", categories=("health",))
+    scheme_factory(db, "rep-cat-agri", categories=("agriculture",))
+    scheme_factory(db, "rep-cat-edu", categories=("education",))
+
+    response = client.get(f"{LIST_URL}?category=health&category=agriculture")
+
+    assert response.status_code == 200
+    ids = _ids(response)
+    assert "rep-cat-health" in ids
+    assert "rep-cat-agri" in ids
+    assert "rep-cat-edu" not in ids
+
+
+def test_repeatable_government_level_query_param_or_logic(
+    client: Any, db: Session, scheme_factory: Callable[..., models.Scheme]
+) -> None:
+    scheme_factory(db, "rep-lvl-central", government_level="central")
+    scheme_factory(db, "rep-lvl-state", government_level="state")
+    scheme_factory(db, "rep-lvl-district", government_level="district")
+
+    response = client.get(f"{LIST_URL}?government_level=central&government_level=state")
+
+    assert response.status_code == 200
+    ids = _ids(response)
+    assert "rep-lvl-central" in ids
+    assert "rep-lvl-state" in ids
+    assert "rep-lvl-district" not in ids
+
+
+def test_repeatable_beneficiary_group_query_param_or_logic(
+    client: Any, db: Session, scheme_factory: Callable[..., models.Scheme]
+) -> None:
+    scheme_a = scheme_factory(db, "rep-grp-farmer")
+    scheme_a.payload = {"categories": ["education"], "beneficiary_groups": ["farmer"]}
+    scheme_b = scheme_factory(db, "rep-grp-student")
+    scheme_b.payload = {"categories": ["education"], "beneficiary_groups": ["student"]}
+    scheme_c = scheme_factory(db, "rep-grp-women")
+    scheme_c.payload = {"categories": ["education"], "beneficiary_groups": ["women"]}
+    db.commit()
+
+    response = client.get(f"{LIST_URL}?beneficiary_group=farmer&beneficiary_group=student")
+
+    assert response.status_code == 200
+    ids = _ids(response)
+    assert "rep-grp-farmer" in ids
+    assert "rep-grp-student" in ids
+    assert "rep-grp-women" not in ids

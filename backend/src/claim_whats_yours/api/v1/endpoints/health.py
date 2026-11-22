@@ -24,6 +24,11 @@ def ready(db: Session = Depends(get_db)) -> dict[str, str] | JSONResponse:
     try:
         db.execute(text("SELECT 1"))
     except Exception:
-        body: dict[str, Any] = {"status": "unavailable"}
-        return JSONResponse(status_code=503, content=body)
-    return {"status": "ok"}
+        body: dict[str, Any] = {
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "Database unreachable",
+            }
+        }
+        return JSONResponse(status_code=500, content=body)
+    return {"status": "ready", "database": "ok"}

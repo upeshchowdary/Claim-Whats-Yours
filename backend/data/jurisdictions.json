@@ -49,5 +49,13 @@
   {"code": "IN-AP-VJA", "name": "NTR (Vijayawada)",  "level": "district", "parent_code": "IN-AP"},
   {"code": "IN-AP-VZM", "name": "Vizianagaram",      "level": "district", "parent_code": "IN-AP"},
   {"code": "IN-AP-VSP", "name": "Visakhapatnam",     "level": "district", "parent_code": "IN-AP"},
-  {"code": "IN-AP-WGD", "name": "West Godavari",     "level": "district", "parent_code": "IN-AP"}
+  {"code": "IN-AP-WGD", "name": "West Godavari",     "level": "district", "parent_code": "IN-AP"},
+
+  {"code": "IN-UP-LKO", "name": "Lucknow",           "level": "district", "parent_code": "IN-UP"},
+  {"code": "IN-MH-PUN", "name": "Pune",              "level": "district", "parent_code": "IN-MH"},
+  {"code": "IN-KA-RAI", "name": "Raichur",           "level": "district", "parent_code": "IN-KA"},
+  {"code": "IN-WB-NAD", "name": "Nadia",             "level": "district", "parent_code": "IN-WB"},
+  {"code": "IN-PB-LDH", "name": "Ludhiana",          "level": "district", "parent_code": "IN-PB"},
+  {"code": "IN-TG-HYD", "name": "Hyderabad",         "level": "district", "parent_code": "IN-TG"},
+  {"code": "IN-RJ-JAI", "name": "Jaipur",            "level": "district", "parent_code": "IN-RJ"}
 ]

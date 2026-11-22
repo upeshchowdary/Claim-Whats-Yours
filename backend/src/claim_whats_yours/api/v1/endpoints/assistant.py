@@ -9,9 +9,11 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 
 from claim_whats_yours.core.config import Settings, get_settings
 from claim_whats_yours.core.errors import AppError
+from claim_whats_yours.db.session import get_db
 from claim_whats_yours.schemas.conversation import ConversationRequest, ConversationTurnResponse
 from claim_whats_yours.services.ai.conversation_service import ConversationService
 from claim_whats_yours.services.ai.groq_client import GroqError
@@ -25,11 +27,12 @@ def assistant_turn(
     body: ConversationRequest,
     request: Request,
     settings: Settings = Depends(get_settings),
+    session: Session = Depends(get_db),
 ) -> ConversationTurnResponse | JSONResponse:
     """Process one stateless conversational profile-collection turn."""
     request_id = str(getattr(request.state, "request_id", "unknown"))
     try:
-        return ConversationService.from_settings(settings).turn(body)
+        return ConversationService.from_settings(settings, session=session).turn(body)
     except ValueError as exc:
         raise AppError(422, "VALIDATION_ERROR", str(exc)) from exc
     except GroqError as exc:
