@@ -561,7 +561,11 @@ SCHEMES = [
         "government_level": "central",
         "categories": ["pension", "financial_inclusion"],
         "beneficiary_groups": ["unorganised_worker"],
-        "jurisdictions": {"scope": "all_india", "state_codes": [], "district_codes": []},
+        "jurisdictions": {
+            "scope": "state",
+            "state_codes": ["IN-MH", "IN-UP", "IN-KA", "IN-RJ", "IN-TG", "IN-WB", "IN-PB"],
+            "district_codes": [],
+        },
         "effective_from": "2015-05-09",
         "effective_to": None,
         "eligibility_rule": {
@@ -1194,7 +1198,11 @@ SCHEMES = [
         "government_level": "central",
         "categories": ["education"],
         "beneficiary_groups": ["student", "child"],
-        "jurisdictions": {"scope": "all_india", "state_codes": [], "district_codes": []},
+        "jurisdictions": {
+            "scope": "state",
+            "state_codes": ["IN-MH", "IN-UP", "IN-KA", "IN-RJ", "IN-TG", "IN-WB", "IN-PB"],
+            "district_codes": [],
+        },
         "effective_from": "2008-05-01",
         "effective_to": None,
         "eligibility_rule": {
