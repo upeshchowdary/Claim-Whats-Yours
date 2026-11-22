@@ -40,6 +40,10 @@ class RequestSizeLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
+        if scope.get("method") in ("GET", "HEAD", "OPTIONS", "DELETE"):
+            await self.app(scope, receive, send)
+            return
+
         headers = scope.get("headers", [])
         request_id = "unknown"
         declared_length: int | None = None
@@ -100,6 +104,38 @@ class RequestSizeLimitMiddleware:
         await response(scope, receive, send)
 
 
+class RequestIdMiddleware:
+    """Pure ASGI middleware that sets X-Request-ID on request and response."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request_id = None
+        for name, value in scope.get("headers", []):
+            if name.lower() == b"x-request-id":
+                request_id = value.decode("latin-1")
+                break
+        if not request_id:
+            request_id = uuid.uuid4().hex
+
+        state = scope.setdefault("state", {})
+        state["request_id"] = request_id
+
+        async def send_with_request_id(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append((b"x-request-id", request_id.encode("latin-1")))
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_with_request_id)
+
+
 def _register_middleware(app: FastAPI) -> None:
     """Attach CORS and request-ID middleware."""
     app.add_middleware(
@@ -108,18 +144,8 @@ def _register_middleware(app: FastAPI) -> None:
         allow_methods=["GET", "POST", "PATCH"],
         allow_headers=["Content-Type", "X-Request-ID", "X-Tracking-Token", "X-Admin-Token"],
     )
-
     app.add_middleware(RequestSizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
-
-    @app.middleware("http")
-    async def request_id_middleware(
-        request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
-        request_id = request.headers.get(REQUEST_ID_HEADER) or uuid.uuid4().hex
-        request.state.request_id = request_id
-        response = await call_next(request)
-        response.headers[REQUEST_ID_HEADER] = request_id
-        return response
+    app.add_middleware(RequestIdMiddleware)
 
 
 def _register_exception_handlers(app: FastAPI) -> None:
