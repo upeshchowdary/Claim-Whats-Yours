@@ -1,0 +1,65 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@db:5432/claim_whats_yours}
+      - ADMIN_API_TOKEN=${ADMIN_API_TOKEN:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Groq settings
+      - GROQ_ENABLED=${GROQ_ENABLED:-false}
+      - GROQ_API_BASE_URL=${GROQ_API_BASE_URL:-https://api.groq.com/openai/v1}
+      - GROQ_MODEL=${GROQ_MODEL:-llama3-8b-8192}
+      - GROQ_API_KEY_1=${GROQ_API_KEY_1:-}
+      - GROQ_API_KEY_2=${GROQ_API_KEY_2:-}
+      - GROQ_API_KEY_3=${GROQ_API_KEY_3:-}
+      - GROQ_TEAM_LABEL_1=${GROQ_TEAM_LABEL_1:-slot-1}
+      - GROQ_TEAM_LABEL_2=${GROQ_TEAM_LABEL_2:-slot-2}
+      - GROQ_TEAM_LABEL_3=${GROQ_TEAM_LABEL_3:-slot-3}
+      - GROQ_TIMEOUT_SECONDS=${GROQ_TIMEOUT_SECONDS:-45}
+      - GROQ_MAX_RETRIES=${GROQ_MAX_RETRIES:-4}
+      - GROQ_MAX_OUTPUT_TOKENS=${GROQ_MAX_OUTPUT_TOKENS:-2000}
+      - GROQ_CIRCUIT_BREAKER_THRESHOLD=${GROQ_CIRCUIT_BREAKER_THRESHOLD:-5}
+      - GROQ_CIRCUIT_BREAKER_RESET_SECONDS=${GROQ_CIRCUIT_BREAKER_RESET_SECONDS:-60}
+      # Data sources
+      - DATA_GOV_IN_ENABLED=${DATA_GOV_IN_ENABLED:-false}
+      - DATA_GOV_IN_API_KEY=${DATA_GOV_IN_API_KEY:-}
+      # Notifications
+      - NOTIFICATIONS_ENABLED=${NOTIFICATIONS_ENABLED:-false}
+      - EMAIL_PROVIDER=${EMAIL_PROVIDER:-}
+      - EMAIL_API_KEY=${EMAIL_API_KEY:-}
+      - SMS_PROVIDER=${SMS_PROVIDER:-}
+      - SMS_API_KEY=${SMS_API_KEY:-}
+    depends_on:
+      - db
+    volumes:
+      - ./data:/app/data:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health/live', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=claim_whats_yours
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

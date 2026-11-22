@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #FAFAF8;
+  --color-surface: #FFFFFF;
+  --color-foreground: #191827;
+  --color-muted: #626174;
+  --color-primary: #4A2BC2;
+  --color-primary-dark: #35208F;
+  --color-primary-soft: #F0ECFF;
+  --color-primary-foreground: #FFFFFF;
+  --color-accent: #E89C30;
+  --color-saffron-soft: #FFF4E2;
+  --color-success: #247A4B;
+  --color-success-soft: #EAF6EF;
+  --color-warning: #946000;
+  --color-warning-soft: #FFF5DF;
+  --color-danger: #B42318;
+  --color-danger-soft: #FDECEC;
+  --color-border: #E9E7EF;
+  --color-dark-surface: #171522;
+  --color-focus-ring: #4A2BC2;
+
+  --font-sans: "Noto Sans", "Noto Sans Devanagari", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --container-content: 1240px;
+
+  --ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-standard: 220ms;
+  --duration-reveal: 500ms;
+}
+
+:root {
+  --background: #FAFAF8;
+  --surface: #FFFFFF;
+  --foreground: #191827;
+  --muted: #626174;
+  --primary: #4A2BC2;
+  --primary-foreground: #FFFFFF;
+  --accent: #E89C30;
+  --success: #247A4B;
+  --warning: #946000;
+  --danger: #B42318;
+  --border: #E9E7EF;
+  --focus-ring: #4A2BC2;
+  --shadow-card: 0 8px 24px rgb(25 24 39 / 0.08);
+  --shadow-card-hover: 0 12px 32px rgb(25 24 39 / 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

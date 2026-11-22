@@ -1,0 +1,185 @@
+{
+  "fields": [
+    {
+      "id": "age_years",
+      "type": "int",
+      "label": "Age (years)",
+      "description": "Your age in completed years.",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "range": {"min": 0, "max": 120}
+    },
+    {
+      "id": "state_code",
+      "type": "enum",
+      "label": "State or union territory",
+      "description": "The state or union territory where you usually live.",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "allowed_values": [
+        "IN",
+        "IN-AP", "IN-AR", "IN-AS", "IN-BR", "IN-CT", "IN-GA", "IN-GJ", "IN-HR", "IN-HP",
+        "IN-JH", "IN-KA", "IN-KL", "IN-MP", "IN-MH", "IN-MN", "IN-ML", "IN-MZ", "IN-NL",
+        "IN-OR", "IN-PB", "IN-RJ", "IN-SK", "IN-TN", "IN-TG", "IN-TR", "IN-UP", "IN-UT",
+        "IN-WB",
+        "IN-AN", "IN-CH", "IN-DN", "IN-DL", "IN-JK", "IN-LA", "IN-LD", "IN-PY"
+      ]
+    },
+    {
+      "id": "district_code",
+      "type": "string",
+      "label": "District",
+      "description": "Your district, as a code from the official district list.",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true
+    },
+    {
+      "id": "residence",
+      "type": "enum",
+      "label": "Residence type",
+      "description": "Whether you live in a rural or urban area.",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "allowed_values": ["rural", "urban"]
+    },
+    {
+      "id": "annual_household_income_inr",
+      "type": "int",
+      "label": "Annual household income (INR)",
+      "description": "Total annual income of your household, in Indian rupees.",
+      "required": false,
+      "sensitivity": "medium",
+      "ask_only_when_relevant": true,
+      "range": {"min": 0, "max": null}
+    },
+    {
+      "id": "occupation",
+      "type": "enum",
+      "label": "Occupation",
+      "description": "Your main current occupation.",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "allowed_values": [
+        "farmer", "salaried", "self_employed", "daily_wage", "unemployed",
+        "student", "homemaker", "retired", "other", "prefer_not_to_say"
+      ]
+    },
+    {
+      "id": "education_level",
+      "type": "enum",
+      "label": "Education level",
+      "description": "The highest level of education you have completed.",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "allowed_values": [
+        "none", "primary", "secondary", "higher_secondary", "graduate",
+        "postgraduate", "other", "prefer_not_to_say"
+      ]
+    },
+    {
+      "id": "is_student",
+      "type": "bool",
+      "label": "Currently a student",
+      "description": "Whether you are currently enrolled in an educational institution.",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "allowed_values": [true, false]
+    },
+    {
+      "id": "gender",
+      "type": "enum",
+      "label": "Gender",
+      "description": "How you identify your gender.",
+      "required": false,
+      "sensitivity": "medium",
+      "ask_only_when_relevant": true,
+      "allowed_values": ["female", "male", "transgender", "other", "prefer_not_to_say"]
+    },
+    {
+      "id": "social_category",
+      "type": "enum",
+      "label": "Social category",
+      "description": "Your social category as recognised for government schemes.",
+      "required": false,
+      "sensitivity": "medium",
+      "ask_only_when_relevant": true,
+      "allowed_values": ["general", "obc", "sc", "st", "ews", "other", "prefer_not_to_say"]
+    },
+    {
+      "id": "disability_status",
+      "type": "bool",
+      "label": "Person with disability",
+      "description": "Whether you have a disability recognised under applicable law.",
+      "required": false,
+      "sensitivity": "medium",
+      "ask_only_when_relevant": true,
+      "allowed_values": [true, false]
+    },
+    {
+      "id": "family_size",
+      "type": "int",
+      "label": "Family size",
+      "description": "Number of people in your household, including you.",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "range": {"min": 1, "max": 50}
+    },
+    {
+      "id": "marital_status",
+      "type": "enum",
+      "label": "Marital status",
+      "description": "Your current marital status.",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "allowed_values": ["single", "married", "widowed", "divorced", "separated", "prefer_not_to_say"]
+    },
+    {
+      "id": "is_farmer",
+      "type": "bool",
+      "label": "Cultivates land",
+      "description": "Whether you personally cultivate agricultural land.",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "allowed_values": [true, false]
+    },
+    {
+      "id": "landholding_acres",
+      "type": "number",
+      "label": "Landholding (acres)",
+      "description": "Total agricultural land owned by your household, in acres.",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "range": {"min": 0, "max": null}
+    },
+    {
+      "id": "is_unorganised_worker",
+      "type": "bool",
+      "label": "Unorganised sector worker",
+      "description": "Whether you work in the unorganised (informal) sector.",
+      "required": false,
+      "sensitivity": "low",
+      "ask_only_when_relevant": true,
+      "allowed_values": [true, false]
+    }
+  ],
+  "forbidden_fields": [
+    "aadhaar",
+    "pan",
+    "bank_account",
+    "password",
+    "government_id",
+    "phone",
+    "email"
+  ]
+}
