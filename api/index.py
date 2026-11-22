@@ -1,8 +1,8 @@
 import os
 import sys
 from pathlib import Path
-from starlette.types import ASGIApp, Scope, Receive, Send
-from fastapi import APIRouter, Request
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 # Setup paths
 current_dir = Path(__file__).resolve().parent
@@ -23,15 +23,6 @@ from claim_whats_yours.core.config import get_settings
 from claim_whats_yours.db.base import Base
 from claim_whats_yours.db.session import make_engine
 from claim_whats_yours.main import create_app
-from claim_whats_yours.api.v1.endpoints import (
-    admin,
-    assistant,
-    eligibility,
-    health,
-    meta,
-    schemes,
-    tracking,
-)
 
 # Initialize database schema and seeds
 try:
@@ -44,44 +35,22 @@ except Exception as err:
 
 app = create_app()
 
-class VercelPathRewriteMiddleware:
-    """Restores original request path from x-matched-path or x-forwarded-path on Vercel."""
-    def __init__(self, app: ASGIApp) -> None:
-        self.app = app
+dist_dir = (root_dir / "frontend" / "dist").resolve()
+assets_dir = dist_dir / "assets"
+if assets_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http":
-            for name, value in scope.get("headers", []):
-                lower_name = name.lower()
-                if lower_name in (b"x-matched-path", b"x-vercel-matched-path", b"x-forwarded-path"):
-                    matched_path = value.decode("latin-1").split("?")[0]
-                    if matched_path and matched_path not in ("/api/index", "/api"):
-                        scope["path"] = matched_path
-                        break
-        await self.app(scope, receive, send)
-
-app.add_middleware(VercelPathRewriteMiddleware)
-
-# Also register /v1 prefix for environments where /api is stripped by routing proxies
-v1_alt = APIRouter(prefix="/v1")
-v1_alt.include_router(meta.router)
-v1_alt.include_router(schemes.router)
-v1_alt.include_router(eligibility.router)
-v1_alt.include_router(assistant.router)
-v1_alt.include_router(tracking.router)
-v1_alt.include_router(admin.router)
-app.include_router(v1_alt)
-
-# Health alternative paths
-@app.get("/live")
-def live_alt():
-    return {"status": "ok"}
+@app.get("/index.html")
+def get_index():
+    return FileResponse(dist_dir / "index.html")
 
 @app.get("/")
-def debug_root(request: Request):
-    return {
-        "status": "ok",
-        "path": request.url.path,
-        "scope_path": request.scope.get("path"),
-        "headers": dict(request.headers),
-    }
+def get_root():
+    return FileResponse(dist_dir / "index.html")
+
+@app.get("/{full_path:path}")
+def catch_all(full_path: str):
+    target = dist_dir / full_path
+    if full_path and target.is_file():
+        return FileResponse(target)
+    return FileResponse(dist_dir / "index.html")

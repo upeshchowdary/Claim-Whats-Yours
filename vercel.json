@@ -4,22 +4,8 @@
   "outputDirectory": "frontend/dist",
   "functions": {
     "api/index.py": {
-      "includeFiles": "backend/**",
+      "includeFiles": "{backend/**,frontend/dist/**}",
       "maxDuration": 30
     }
-  },
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/health/(.*)",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/((?!api|health).*)",
-      "destination": "/index.html"
-    }
-  ]
+  }
 }
